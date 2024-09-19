@@ -2,7 +2,7 @@ import csv
 import json
 
 
-def read_graph_from_csv(csv_data: str, with_titles: bool = False) -> dict:
+def read_graph_from_csv(csv_data: str, with_titles: bool = False) -> dict[str, list[str]]:
     lines = csv_data.strip().split("\n")
 
     reader = csv.reader(lines[1:] if with_titles else lines, delimiter=",")
@@ -17,17 +17,17 @@ def read_graph_from_csv(csv_data: str, with_titles: bool = False) -> dict:
     return graph
 
 
-def count_all_children(graph: dict) -> dict:
+def count_all_children(graph: dict[str, list[str]]) -> dict[str, int]:
     result = {}
 
-    def dfs(node: str) -> int:
-        if node in result:
-            return result[node]
+    def dfs(from_node: str) -> int:
+        if from_node in result:
+            return result[from_node]
 
         total = 0
-        for child in graph[node]:
+        for child in graph[from_node]:
             total += 1 + dfs(child)
-        result[node] = total
+        result[from_node] = total
         return total
 
     for node in graph:
@@ -36,34 +36,36 @@ def count_all_children(graph: dict) -> dict:
     return result
 
 
+def reverse_graph(graph: dict[str, list[str]]) -> dict[str, list[str]]:
+    reversed_graph = {node: [] for node in graph}
+    for node in graph:
+        for child in graph[node]:
+            reversed_graph[child].append(node)
+    return reversed_graph
+
+
 def main(data: str) -> str:
     graph = read_graph_from_csv(data)
 
     nodes = set(graph.keys()).union(*graph.values())
     nodes = {node: i for i, node in enumerate(sorted(nodes))}
 
-    parents_dict = {node: [] for node in nodes}
-    for node in graph:
-        for child in graph[node]:
-            parents_dict[child].append(node)
-            current_node = node
-            while parents_dict[current_node]:
-                current_node = parents_dict[current_node][0]
-                parents_dict[child].append(current_node)
-
+    reversed_graph = reverse_graph(graph)
     children_count = count_all_children(graph)
+    parents_count = count_all_children(reversed_graph)
+
     extensional_lengths = [[0] * 5 for _ in range(len(nodes))]
 
     for node in graph:
         node_id = nodes[node]
         extensional_lengths[node_id][0] = len(graph[node])
-        extensional_lengths[node_id][1] = 1 if parents_dict[node] else 0
+        extensional_lengths[node_id][1] = 1 if parents_count[node] > 0 else 0
         extensional_lengths[node_id][2] = children_count[node] - len(graph[node])
 
-        if parents_dict[node]:
-            parent = parents_dict[node][0]
+        if reversed_graph[node]:
+            parent = reversed_graph[node][0]
 
-            extensional_lengths[node_id][3] = len(parents_dict[parent])
+            extensional_lengths[node_id][3] = parents_count[parent]
             extensional_lengths[node_id][4] = len(graph[parent]) - 1
 
     return json.dumps(extensional_lengths)
@@ -71,6 +73,4 @@ def main(data: str) -> str:
 
 if __name__ == "__main__":
     with open("graph.csv", "r") as file:
-        data = file.read()
-
-    print(main(data))
+        print(main(file.read()))
